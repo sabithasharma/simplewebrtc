@@ -1,5 +1,10 @@
 #Steps to run.
-npm install
-node index.js
+
+
+1. npm install 
+
+2. node index.js
+
+3. go to browser
 
 http://localhost:8080/
