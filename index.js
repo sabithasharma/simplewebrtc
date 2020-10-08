@@ -1,5 +1,13 @@
 'use strict';
 
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+  key: fs.readFileSync('key.pem'),
+  cert: fs.readFileSync('cert.pem')
+};
+
 var os = require('os');
 var nodeStatic = require('node-static');
 var http = require('http');
@@ -10,6 +18,7 @@ var fileServer = new(nodeStatic.Server)();
 var app = http.createServer(function(req, res) {
     fileServer.serve(req, res);
 }).listen(PORT);
+
 
 var io = socketIO.listen(app);
 io.sockets.on('connection', function(socket) {
