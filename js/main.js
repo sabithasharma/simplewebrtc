@@ -7,6 +7,8 @@ var localStream;
 var pc;
 var remoteStream;
 var turnReady;
+var sendChannel = ''
+var receiveChannel = ''
 
 var pcConfig = {
   'iceServers': [{
@@ -22,62 +24,91 @@ var sdpConstraints = {
 
 /////////////////////////////////////////////
 
-var room = 'foo';
+var room = '';
 // Could prompt for room name:
 // room = prompt('Enter room name:');
 
 var socket = io.connect();
 
-if (room !== '') {
-  socket.emit('create or join', room);
-  console.log('Attempted to create or  join room', room);
-}
 
-socket.on('created', function(room) {
+socket.on('created', function (room) {
   console.log('Created room ' + room);
   isInitiator = true;
 });
 
-socket.on('full', function(room) {
+socket.on('full', function (room) {
+  alert("Room with id " + room + "is full");
   console.log('Room ' + room + ' is full');
 });
 
-socket.on('join', function (room){
+socket.on('join', function (room) {
   console.log('Another peer made a request to join room ' + room);
   console.log('This peer is the initiator of room ' + room + '!');
   isChannelReady = true;
 });
 
-socket.on('joined', function(room) {
+socket.on('joined', function (room) {
   console.log('joined: ' + room);
   isChannelReady = true;
 });
 
-socket.on('log', function(array) {
+socket.on('log', function (array) {
   console.log.apply(console, array);
 });
 
 ////////////////////////////////////////////////
+
+function joinRoom() {
+  var room = $('#roomId').val()
+  if (room !== '') {
+    socket.emit('create or join', room);
+    console.log('Attempted to create or  join room', room);
+    navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: true
+    })
+      .then(gotStream)
+      .catch(function (e) {
+        alert('getUserMedia() error: ' + e.name);
+      });
+
+    function gotStream(stream) {
+      console.log('Adding local stream.');
+      localStream = stream;
+      localVideo.srcObject = stream;
+      sendMessage('got user media');
+      if (isInitiator) {
+        maybeStart();
+      }
+    }
+
+  }
+}
 
 function sendMessage(message) {
   console.log('Client sending message: ', message);
   socket.emit('message', message);
 }
 
-function sendChatMessage(message) {
-  console.log('Client sending chat message: ', message);
+function sendChatMessage() {
   console.log($('#messageBox').val());
-  socket.emit('chat', $('#messageBox').val());
+  var message = $('#messageBox').val()
+  //socket.emit('chat', $('#messageBox').val());
+  if (sendChannel) {
+    sendChannel.send(message);
+    handleReceiveMessage(message)
+  }
+
 }
 
-socket.on('chat', function(message) {
+/*socket.on('chat', function (message) {
   var txt3 = document.createElement("p");
-  txt3.innerHTML = message; 
+  txt3.innerHTML = message;
   $('#chatBox').append(txt3)
-})
+})*/
 
 // This client receives a message
-socket.on('message', function(message) {
+socket.on('message', function (message) {
   console.log('Client received message:', message);
   if (message === 'got user media') {
     maybeStart();
@@ -105,24 +136,6 @@ socket.on('message', function(message) {
 var localVideo = document.querySelector('#localVideo');
 var remoteVideo = document.querySelector('#remoteVideo');
 
-navigator.mediaDevices.getUserMedia({
-  audio: false,
-  video: true
-})
-.then(gotStream)
-.catch(function(e) {
-  alert('getUserMedia() error: ' + e.name);
-});
-
-function gotStream(stream) {
-  console.log('Adding local stream.');
-  localStream = stream;
-  localVideo.srcObject = stream;
-  sendMessage('got user media');
-  if (isInitiator) {
-    maybeStart();
-  }
-}
 
 var constraints = {
   video: true
@@ -150,7 +163,7 @@ function maybeStart() {
   }
 }
 
-window.onbeforeunload = function() {
+window.onbeforeunload = function () {
   sendMessage('bye');
 };
 
@@ -163,6 +176,8 @@ function createPeerConnection() {
     } else {
       pc = new RTCPeerConnection(null);
     }
+    sendChannel = pc.createDataChannel("sendChannel");
+    pc.ondatachannel = handleChannelCallback;
     pc.onicecandidate = handleIceCandidate;
     pc.onaddstream = handleRemoteStreamAdded;
     pc.onremovestream = handleRemoteStreamRemoved;
@@ -172,6 +187,17 @@ function createPeerConnection() {
     alert('Cannot create RTCPeerConnection object.');
     return;
   }
+}
+
+function handleChannelCallback(event) {
+  receiveChannel = event.channel;
+  receiveChannel.onmessage = handleReceiveMessage;
+}
+
+function handleReceiveMessage (event) {
+  var txt3 = document.createElement("p");
+  txt3.innerHTML = event.data || event;
+  $('#chatBox').append(txt3)
 }
 
 function handleIceCandidate(event) {
@@ -228,7 +254,7 @@ function requestTurn(turnURL) {
     console.log('Getting TURN server from ', turnURL);
     // No TURN server. Get one from computeengineondemand.appspot.com:
     var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function() {
+    xhr.onreadystatechange = function () {
       if (xhr.readyState === 4 && xhr.status === 200) {
         var turnServer = JSON.parse(xhr.responseText);
         console.log('Got TURN server: ', turnServer);
